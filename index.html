@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duizenden - Mobile Scorekeeper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+```
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        min-height: 100vh;
+        padding: 0;
+        font-size: 16px;
+        line-height: 1.5;
+        color: #e0e6ed;
+    }
+
+    .container {
+        max-width: 100%;
+        margin: 0;
+        background: #0f1419;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .header {
+        background: linear-gradient(45deg, #ff6b6b, #feca57);
+        color: white;
+        padding: 20px 15px;
+        text-align: center;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+
+    .header h1 {
+        font-size: 1.8rem;
+        margin-bottom: 5px;
+        font-weight: 700;
+    }
+
+    .header p {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    .controls {
+        padding: 15px;
+        background: #1a1f2e;
+        border-bottom: 1px solid #2d3748;
+    }
+
+    .player-input {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .player-input input {
+        flex: 1;
+        padding: 15px;
+        border: 2px solid #4a5568;
+        border-radius: 12px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        background: #2d3748;
+        color: #e0e6ed;
+    }
+
+    .player-input input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+
+    /* Mobile UX Best Practices Applied */
+    
+    /* Touch Target Optimization - Minimum 48px per accessibility guidelines */
+    .btn {
+        padding: 16px 24px;
+        border: none;
+        border-radius: 12px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        min-height: 48px;
+        min-width: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: manipulation;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* Enhanced visual feedback for touch interactions */
+    .btn::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.3);
+        transform: translate(-50%, -50%);
+        transition: width 0.2s, height 0.2s;
+    }
+
+    .btn:active::after {
+        width: 100%;
+        height: 100%;
+    }
+
+    .btn-primary {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-danger {
+        background: linear-gradient(45deg, #ff6b6b, #ff5722);
+        color: white;
+        width: 100%;
+        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+
+    .btn-danger:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    }
+
+    .btn-success {
+        background: linear-gradient(45deg, #00d2ff, #3a7bd5);
+        color: white;
+        width: 100%;
+        margin-top: 20px;
+        font-size: 18px;
+        font-weight: 700;
+        box-shadow: 0 4px 12px rgba(0, 210, 255, 0.3);
+    }
+
+    .btn-success:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 8px rgba(0, 210, 255, 0.3);
+    }
+
+    .game-area {
+        flex: 1;
+        padding: 15px;
+        overflow-x: auto;
+        background: #0f1419;
+    }
+
+    .players-grid {
+        display: grid;
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+
+    .player-card {
+        background: #1a1f2e;
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        border-left: 5px solid #4ecdc4;
+        position: relative;
+        border: 1px solid #2d3748;
+    }
+
+    .player-card.winner {
+        border-left-color: #00b894;
+        background: linear-gradient(45deg, #1a2f1a, #0d4f2b);
+        animation: winner-pulse 2s infinite;
+    }
+
+    .player-card.close-to-win {
+        border-left-color: #fdcb6e;
+        background: linear-gradient(45deg, #2a2616, #3d3626);
+    }
+
+    .player-card.over-limit {
+        border-left-color: #e17055;
+        background: linear-gradient(45deg, #2a1616, #3d2626);
+    }
+
+    @keyframes winner-pulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+    }
+
+    .player-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .player-name {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #e0e6ed;
+    }
+
+    .player-total {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #e0e6ed;
+    }
+
+    .remove-player {
+        background: #ff6b6b;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        cursor: pointer;
+        font-size: 18px;
+        transition: all 0.2s ease;
+        touch-action: manipulation;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+
+    .remove-player:active {
+        transform: translateY(1px);
+        background: #e55656;
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    }
+
+    .score-input-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        background: #2d3748;
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 12px;
+        border: 1px solid #4a5568;
+    }
+
+    .round-label {
+        font-weight: 600;
+        color: #a0aec0;
+        min-width: 48px;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .score-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex: 1;
+    }
+
+    .score-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        width: 48px;
+        height: 48px;
+        font-size: 20px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        touch-action: manipulation;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    .score-btn:active {
+        transform: translateY(1px);
+        background: #5a6fd8;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .score-btn.minus {
+        background: #ff6b6b;
+        box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+
+    .score-btn.minus:active {
+        background: #e55656;
+        box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+    }
+
+    .score-input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 2px solid #4a5568;
+        border-radius: 12px;
+        text-align: center;
+        font-size: 18px;
+        font-weight: 600;
+        max-width: 100px;
+        background: #1a1f2e;
+        color: #e0e6ed;
+        min-height: 48px;
+        transition: all 0.2s ease;
+    }
+
+    .score-input:focus {
+        outline: none;
+        border-color: #4ecdc4;
+        box-shadow: 0 0 0 4px rgba(78, 205, 196, 0.2);
+        background: #374151;
+    }
+
+    .quick-scores {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+        justify-content: center;
+    }
+
+    .quick-score-btn {
+        background: #74b9ff;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 12px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        touch-action: manipulation;
+        min-height: 44px;
+        min-width: 60px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(116, 185, 255, 0.3);
+    }
+
+    .quick-score-btn:active {
+        transform: translateY(1px);
+        background: #5a9df7;
+        box-shadow: 0 1px 4px rgba(116, 185, 255, 0.3);
+    }
+
+    .no-players {
+        text-align: center;
+        padding: 80px 24px;
+        color: #a0aec0;
+        font-size: 18px;
+        line-height: 1.6;
+    }
+
+    .rounds-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding: 0 8px;
+    }
+
+    .rounds-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #e0e6ed;
+    }
+
+    .round-counter {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Status indicators */
+    .status-indicator {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    .status-winner {
+        background: #00b894;
+        color: white;
+    }
+
+    .status-close {
+        background: #fdcb6e;
+        color: #2d3436;
+    }
+
+    .status-over {
+        background: #e17055;
+        color: white;
+    }
+
+    /* Responsive and Accessibility Improvements */
+    @media (max-width: 480px) {
+        .player-input {
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .btn-primary {
+            width: 100%;
+            margin-top: 0;
+        }
+        
+        .score-controls {
+            flex-direction: row;
+            gap: 12px;
+            justify-content: center;
+        }
+        
+        .score-input {
+            max-width: 120px;
+        }
+        
+        .quick-scores {
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .quick-score-btn {
+            min-width: 80px;
+            padding: 14px 18px;
+        }
+
+        /* Larger touch targets for smaller screens */
+        .score-btn {
+            width: 52px;
+            height: 52px;
+            font-size: 22px;
+        }
+
+        .remove-player {
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+        }
+    }
+
+    /* Large screen optimizations */
+    @media (min-width: 768px) {
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            min-height: calc(100vh - 40px);
+        }
+
+        .players-grid {
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
+        }
+
+        .game-area {
+            padding: 32px;
+        }
+
+        .controls {
+            padding: 24px 32px;
+        }
+    }
+
+    /* Improved focus states for accessibility */
+    .btn:focus-visible,
+    .score-btn:focus-visible,
+    .quick-score-btn:focus-visible,
+    .remove-player:focus-visible,
+    .round-header-btn:focus-visible {
+        outline: 3px solid #667eea;
+        outline-offset: 2px;
+    }
+
+    .player-input input:focus-visible,
+    .score-input:focus-visible {
+        outline: 3px solid #4ecdc4;
+        outline-offset: 2px;
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: high) {
+        .player-card {
+            border: 2px solid #ffffff;
+        }
+        
+        .score-input-container {
+            border: 2px solid #ffffff;
+        }
+        
+        .btn, .score-btn, .quick-score-btn {
+            border: 2px solid #ffffff;
+        }
+    }
+
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+        .btn, .score-btn, .quick-score-btn, .remove-player, 
+        .round-header-btn, .accordion-icon {
+            transition: none;
+        }
+        
+        .winner {
+            animation: none;
+        }
+    }
+
+    /* Dark mode preference detection */
+    @media (prefers-color-scheme: light) {
+        /* App is already optimized for dark mode, 
+           but could add light mode overrides here if needed */
+    }
+
+    .save-indicator {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #00b894;
+        color: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        opacity: 0;
+        transform: translateY(20px);
+        transition: all 0.3s ease;
+        z-index: 1000;
+    }
+
+    .save-indicator.show {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* Table View Styles */
+    .table-view {
+        overflow-x: auto;
+        margin: 20px 0;
+    }
+
+    .scores-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #1a1f2e;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        min-width: 300px;
+    }
+
+    .scores-table th {
+        background: linear-gradient(45deg, #4ecdc4, #44a08d);
+        color: white;
+        padding: 15px 8px;
+        font-weight: 600;
+        text-align: center;
+        font-size: 0.9rem;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+
+    .scores-table td {
+        padding: 12px 8px;
+        text-align: center;
+        border-bottom: 1px solid #2d3748;
+        font-size: 0.9rem;
+        color: #e0e6ed;
+        position: relative;
+    }
+
+    .scores-table tr:hover {
+        background-color: rgba(78, 205, 196, 0.1);
+    }
+
+    .round-cell {
+        background: #2d3748;
+        font-weight: 600;
+        color: #a0aec0;
+        min-width: 60px;
+    }
+
+    .score-cell {
+        font-weight: 500;
+        min-width: 80px;
+    }
+
+    .total-row {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        color: white;
+        font-weight: 700;
+        font-size: 1rem;
+    }
+
+    .total-row td {
+        border-bottom: none;
+        padding: 15px 8px;
+    }
+
+    .running-total {
+        font-size: 0.75rem;
+        color: #a0aec0;
+        display: block;
+        margin-top: 2px;
+        font-weight: 400;
+    }
+
+    .score-with-total {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .round-score {
+        font-weight: 600;
+        color: #e0e6ed;
+    }
+
+    /* Leader indicators */
+    .leader-1 {
+        background: linear-gradient(45deg, #00b894, #55efc4) !important;
+        color: #2d3436 !important;
+        position: relative;
+    }
+
+    .leader-1::after {
+        content: "🥇";
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 0.8rem;
+    }
+
+    .leader-2 {
+        background: linear-gradient(45deg, #fdcb6e, #e17055) !important;
+        color: #2d3436 !important;
+        position: relative;
+    }
+
+    .leader-2::after {
+        content: "🥈";
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 0.8rem;
+    }
+
+    .leader-3 {
+        background: linear-gradient(45deg, #fd79a8, #e84393) !important;
+        color: white !important;
+        position: relative;
+    }
+
+    .leader-3::after {
+        content: "🥉";
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        font-size: 0.8rem;
+    }
+
+    .winner-total {
+        background: linear-gradient(45deg, #00b894, #55efc4) !important;
+        color: #2d3436 !important;
+        animation: winner-pulse 2s infinite;
+        font-size: 1.2rem !important;
+    }
+
+    .close-total {
+        background: linear-gradient(45deg, #fdcb6e, #e17055) !important;
+        color: #2d3436 !important;
+    }
+
+    .over-total {
+        background: linear-gradient(45deg, #d63031, #74b9ff) !important;
+        color: white !important;
+    }
+
+    /* Accordion Styles - Optimized for touch */
+    .round-accordion {
+        margin-bottom: 12px;
+    }
+
+    .round-header-btn {
+        width: 100%;
+        background: #2d3748;
+        border: 2px solid #4a5568;
+        border-radius: 12px;
+        padding: 16px 20px;
+        color: #e0e6ed;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: all 0.2s ease;
+        touch-action: manipulation;
+        min-height: 56px;
+    }
+
+    .round-header-btn:hover {
+        background: #4a5568;
+        border-color: #667eea;
+    }
+
+    .round-header-btn:active {
+        transform: translateY(1px);
+        background: #4a5568;
+    }
+
+    .round-header-btn.expanded {
+        background: #4a5568;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        border-bottom: none;
+        border-color: #667eea;
+    }
+
+    .round-info {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .round-number {
+        font-weight: 700;
+        color: #4ecdc4;
+        font-size: 16px;
+        min-width: 40px;
+    }
+
+    .round-score-display {
+        font-weight: 700;
+        color: #e0e6ed;
+        font-size: 16px;
+        padding: 4px 12px;
+        border-radius: 8px;
+        min-width: 60px;
+        text-align: center;
+    }
+
+    .round-score-display.positive {
+        color: #00b894;
+        background: rgba(0, 184, 148, 0.1);
+    }
+
+    .round-score-display.negative {
+        color: #e17055;
+        background: rgba(225, 112, 85, 0.1);
+    }
+
+    .round-score-display.zero {
+        color: #a0aec0;
+        background: rgba(160, 174, 192, 0.1);
+    }
+
+    .accordion-icon {
+        font-size: 18px;
+        transition: transform 0.2s ease;
+        color: #a0aec0;
+        min-width: 24px;
+        text-align: center;
+    }
+
+    .accordion-icon.expanded {
+        transform: rotate(180deg);
+        color: #667eea;
+    }
+
+    .round-content {
+        background: #2d3748;
+        border: 2px solid #4a5568;
+        border-top: none;
+        border-radius: 0 0 12px 12px;
+        padding: 20px;
+        display: none;
+    }
+
+    .round-content.expanded {
+        display: block;
+    }
+
+    .current-round {
+        border-left: 4px solid #4ecdc4;
+    }
+
+    .current-round .round-header-btn {
+        background: linear-gradient(45deg, #4ecdc4, #44a08d);
+        color: white;
+        border-color: #4ecdc4;
+    }
+
+    .current-round .round-number {
+        color: white;
+    }
+
+    .current-round .round-score-display {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+    }
+
+    .current-round .accordion-icon {
+        color: white;
+    }
+
+    .current-round .accordion-icon.expanded {
+        color: white;
+    }
+</style>
+```
+
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Duizenden</h1>
+            <p>Bereik precies 1000 punten om te winnen!</p>
+        </div>
+
+```
+    <div class="controls">
+        <div class="player-input">
+            <input type="text" id="playerName" placeholder="Speler naam..." maxlength="20">
+            <button class="btn btn-primary" onclick="addPlayer()">Toevoegen</button>
+        </div>
+        <button class="btn btn-danger" onclick="resetGame()">Nieuw Spel</button>
+        <button class="btn btn-primary" id="viewToggle" onclick="toggleView()" style="margin-top: 10px; width: 100%;">📊 Tabel Weergave</button>
+    </div>
+
+    <div class="game-area">
+        <div id="gameContent">
+            <div class="no-players">
+                👆 Voeg spelers toe om te beginnen!
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="saveIndicator" class="save-indicator">Opgeslagen! ✓</div>
+
+<script>
+    let players = [];
+    let rounds = [];
+    let currentView = 'cards'; // 'cards' or 'table'
+
+    // Note: localStorage is not supported in Claude.ai artifacts
+    // In a real environment, uncomment these functions:
+    
+    function saveGame() {
+        try {
+            const gameData = {
+                players: players,
+                rounds: rounds,
+                timestamp: new Date().toISOString()
+            };
+            // localStorage.setItem('duizenden_game', JSON.stringify(gameData));
+            showSaveIndicator();
+        } catch (e) {
+            console.log('Save not available in Claude.ai environment');
+        }
+    }
+
+    function loadGame() {
+        try {
+            // const saved = localStorage.getItem('duizenden_game');
+            // if (saved) {
+            //     const gameData = JSON.parse(saved);
+            //     players = gameData.players || [];
+            //     rounds = gameData.rounds || [];
+            //     updateDisplay();
+            // }
+        } catch (e) {
+            console.log('Load not available in Claude.ai environment');
+        }
+    }
+
+    function showSaveIndicator() {
+        const indicator = document.getElementById('saveIndicator');
+        indicator.classList.add('show');
+        setTimeout(() => {
+            indicator.classList.remove('show');
+        }, 2000);
+    }
+
+    function addPlayer() {
+        const nameInput = document.getElementById('playerName');
+        const name = nameInput.value.trim();
+        
+        if (name === '') {
+            alert('Voer een speler naam in!');
+            return;
+        }
+        
+        if (players.includes(name)) {
+            alert('Deze speler bestaat al!');
+            return;
+        }
+        
+        players.push(name);
+        nameInput.value = '';
+        
+        // Add this player to all existing rounds with 0 score
+        rounds.forEach(round => {
+            if (!round.hasOwnProperty(name)) {
+                round[name] = 0;
+            }
+        });
+        
+        updateDisplay();
+        saveGame();
+    }
+
+    function removePlayer(playerName) {
+        if (confirm(`Weet je zeker dat je ${playerName} wilt verwijderen?`)) {
+            const index = players.indexOf(playerName);
+            if (index > -1) {
+                players.splice(index, 1);
+                rounds.forEach(round => {
+                    delete round[playerName];
+                });
+                updateDisplay();
+                saveGame();
+            }
+        }
+    }
+
+    function addRound() {
+        const newRound = {};
+        players.forEach(player => {
+            newRound[player] = 0;
+        });
+        rounds.push(newRound);
+        updateDisplay();
+        saveGame();
+    }
+
+    function updateScore(roundIndex, player, value) {
+        if (rounds[roundIndex]) {
+            rounds[roundIndex][player] = parseInt(value) || 0;
+            updateDisplay();
+            saveGame();
+        }
+    }
+
+    function adjustScore(roundIndex, player, change) {
+        if (rounds[roundIndex]) {
+            const currentScore = rounds[roundIndex][player] || 0;
+            rounds[roundIndex][player] = currentScore + change;
+            updateDisplay();
+            saveGame();
+        }
+    }
+
+    function addQuickScore(roundIndex, player, score) {
+        if (rounds[roundIndex]) {
+            const currentScore = rounds[roundIndex][player] || 0;
+            rounds[roundIndex][player] = currentScore + score;
+            updateDisplay();
+            saveGame();
+        }
+    }
+
+    function getPlayerTotal(player) {
+        return rounds.reduce((total, round) => total + (round[player] || 0), 0);
+    }
+
+    function getScoreClass(total) {
+        if (total === 1000) return 'winner';
+        if (total >= 950 && total < 1000) return 'close-to-win';
+        if (total > 1000) return 'over-limit';
+        return '';
+    }
+
+    function getStatusText(total) {
+        if (total === 1000) return 'WINNAAR! 🏆';
+        if (total >= 950 && total < 1000) return 'Bijna! 🔥';
+        if (total > 1000) return 'Te veel! ❌';
+        return '';
+    }
+
+    function toggleView() {
+        currentView = currentView === 'cards' ? 'table' : 'cards';
+        const toggleBtn = document.getElementById('viewToggle');
+        if (currentView === 'table') {
+            toggleBtn.textContent = '📱 Kaart Weergave';
+        } else {
+            toggleBtn.textContent = '📊 Tabel Weergave';
+        }
+        updateDisplay();
+    }
+
+    function getLeaderRanking() {
+        const totals = players.map(player => ({
+            name: player,
+            total: getPlayerTotal(player)
+        }));
+        
+        // Sort by proximity to 1000, then by highest score
+        totals.sort((a, b) => {
+            const aDistance = Math.abs(1000 - a.total);
+            const bDistance = Math.abs(1000 - b.total);
+            
+            // If one is exactly 1000, they win
+            if (a.total === 1000 && b.total !== 1000) return -1;
+            if (b.total === 1000 && a.total !== 1000) return 1;
+            
+            // If both are over 1000, closer to 1000 wins
+            if (a.total > 1000 && b.total > 1000) {
+                return aDistance - bDistance;
+            }
+            
+            // If both are under 1000, higher score wins
+            if (a.total < 1000 && b.total < 1000) {
+                return b.total - a.total;
+            }
+            
+            // Mixed case: under 1000 beats over 1000
+            if (a.total < 1000 && b.total > 1000) return -1;
+            if (b.total < 1000 && a.total > 1000) return 1;
+            
+            return 0;
+        });
+        
+        return totals;
+    }
+
+    function toggleRound(roundIndex, player) {
+        const content = document.getElementById(`round-content-${roundIndex}-${player}`);
+        const icon = document.getElementById(`accordion-icon-${roundIndex}-${player}`);
+        const headerBtn = document.getElementById(`round-header-${roundIndex}-${player}`);
+        
+        if (content.classList.contains('expanded')) {
+            content.classList.remove('expanded');
+            icon.classList.remove('expanded');
+            headerBtn.classList.remove('expanded');
+        } else {
+            content.classList.add('expanded');
+            icon.classList.add('expanded');
+            headerBtn.classList.add('expanded');
+        }
+    }
+
+    function getScoreDisplayClass(score) {
+        if (score > 0) return 'positive';
+        if (score < 0) return 'negative';
+        return 'zero';
+    }
+
+    function generateTableView() {
+        if (players.length === 0) {
+            return '<div class="no-players">👆 Voeg spelers toe om te beginnen!</div>';
+        }
+
+        if (rounds.length === 0) {
+            return '<div class="no-players">🎯 Voeg een ronde toe om scores te zien!</div>';
+        }
+
+        const ranking = getLeaderRanking();
+        
+        let html = '<div class="table-view">';
+        html += '<table class="scores-table">';
+        
+        // Header row
+        html += '<tr><th class="round-cell">Ronde</th>';
+        players.forEach(player => {
+            const rank = ranking.findIndex(r => r.name === player);
+            let rankClass = '';
+            if (rank === 0) rankClass = 'leader-1';
+            else if (rank === 1) rankClass = 'leader-2';
+            else if (rank === 2) rankClass = 'leader-3';
+            
+            html += `<th class="score-cell ${rankClass}">${player}</th>`;
+        });
+        html += '</tr>';
+
+        // Round rows with running totals
+        rounds.forEach((round, roundIndex) => {
+            html += '<tr>';
+            html += `<td class="round-cell">R${roundIndex + 1}</td>`;
+            
+            players.forEach(player => {
+                const roundScore = round[player] || 0;
+                const runningTotal = rounds.slice(0, roundIndex + 1)
+                    .reduce((sum, r) => sum + (r[player] || 0), 0);
+                
+                html += `
+                    <td class="score-cell">
+                        <div class="score-with-total">
+                            <span class="round-score">${roundScore > 0 ? '+' : ''}${roundScore}</span>
+                            <span class="running-total">(${runningTotal})</span>
+                        </div>
+                    </td>
+                `;
+            });
+            html += '</tr>';
+        });
+
+        // Total row
+        html += '<tr class="total-row">';
+        html += '<td>TOTAAL</td>';
+        players.forEach(player => {
+            const total = getPlayerTotal(player);
+            let totalClass = '';
+            if (total === 1000) totalClass = 'winner-total';
+            else if (total >= 950 && total < 1000) totalClass = 'close-total';
+            else if (total > 1000) totalClass = 'over-total';
+            
+            html += `<td class="${totalClass}">${total}</td>`;
+        });
+        html += '</tr>';
+
+        html += '</table>';
+        html += '</div>';
+        
+        html += '<button class="btn btn-success" onclick="addRound()">🎯 Nieuwe Ronde</button>';
+        
+        return html;
+    }
+
+    function updateDisplay() {
+        const gameContent = document.getElementById('gameContent');
+        
+        if (players.length === 0) {
+            gameContent.innerHTML = '<div class="no-players">👆 Voeg spelers toe om te beginnen!</div>';
+            return;
+        }
+
+        if (currentView === 'table') {
+            gameContent.innerHTML = generateTableView();
+            return;
+        }
+
+        // Cards view (existing code)
+        // Ensure we have at least one round
+        if (rounds.length === 0) {
+            addRound();
+            return;
+        }
+
+        let html = '';
+        
+        if (rounds.length > 0) {
+            html += `
+                <div class="rounds-header">
+                    <div class="rounds-title">Scorebord</div>
+                    <div class="round-counter">Ronde ${rounds.length}</div>
+                </div>
+            `;
+        }
+
+        html += '<div class="players-grid">';
+
+        players.forEach(player => {
+            const total = getPlayerTotal(player);
+            const scoreClass = getScoreClass(total);
+            const statusText = getStatusText(total);
+            
+            html += `
+                <div class="player-card ${scoreClass}">
+                    ${statusText ? `<div class="status-indicator status-${scoreClass.split('-')[0] || 'normal'}">${statusText}</div>` : ''}
+                    <div class="player-header">
+                        <div class="player-name">${player}</div>
+                        <div class="player-total">${total}</div>
+                        <button class="remove-player" onclick="removePlayer('${player}')" title="Verwijder speler">×</button>
+                    </div>
+            `;
+
+            rounds.forEach((round, roundIndex) => {
+                const roundScore = round[player] || 0;
+                const isCurrentRound = roundIndex === rounds.length - 1;
+                const scoreClass = getScoreDisplayClass(roundScore);
+                
+                html += `
+                    <div class="round-accordion ${isCurrentRound ? 'current-round' : ''}">
+                        <button class="round-header-btn ${isCurrentRound ? 'expanded' : ''}" 
+                                id="round-header-${roundIndex}-${player}"
+                                onclick="toggleRound(${roundIndex}, '${player}')">
+                            <div class="round-info">
+                                <span class="round-number">R${roundIndex + 1}</span>
+                                <span class="round-score-display ${scoreClass}">
+                                    ${roundScore > 0 ? '+' : ''}${roundScore}
+                                </span>
+                            </div>
+                            <span class="accordion-icon ${isCurrentRound ? 'expanded' : ''}" 
+                                  id="accordion-icon-${roundIndex}-${player}">▼</span>
+                        </button>
+                        <div class="round-content ${isCurrentRound ? 'expanded' : ''}" 
+                             id="round-content-${roundIndex}-${player}">
+                            <div class="score-input-container">
+                                <div class="score-controls">
+                                    <button class="score-btn minus" onclick="adjustScore(${roundIndex}, '${player}', -10)">−</button>
+                                    <input type="number" 
+                                           class="score-input" 
+                                           value="${roundScore}"
+                                           onchange="updateScore(${roundIndex}, '${player}', this.value)"
+                                           min="-500" max="500"
+                                           inputmode="numeric">
+                                    <button class="score-btn" onclick="adjustScore(${roundIndex}, '${player}', 10)">+</button>
+                                </div>
+                            </div>
+                            <div class="quick-scores">
+                                <button class="quick-score-btn" onclick="addQuickScore(${roundIndex}, '${player}', -50)">-50</button>
+                                <button class="quick-score-btn" onclick="addQuickScore(${roundIndex}, '${player}', -20)">-20</button>
+                                <button class="quick-score-btn" onclick="addQuickScore(${roundIndex}, '${player}', 20)">+20</button>
+                                <button class="quick-score-btn" onclick="addQuickScore(${roundIndex}, '${player}', 50)">+50</button>
+                                <button class="quick-score-btn" onclick="addQuickScore(${roundIndex}, '${player}', 100)">+100</button>
+                                <button class="quick-score-btn" onclick="addQuickScore(${roundIndex}, '${player}', 150)">+150</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+        });
+
+        html += '</div>';
+        html += '<button class="btn btn-success" onclick="addRound()">🎯 Nieuwe Ronde</button>';
+
+        gameContent.innerHTML = html;
+    }
+
+    function resetGame() {
+        if (confirm('Weet je zeker dat je een nieuw spel wilt starten? Alle scores gaan verloren.')) {
+            players = [];
+            rounds = [];
+            updateDisplay();
+            saveGame();
+        }
+    }
+
+    // Allow adding players with Enter key
+    document.getElementById('playerName').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            addPlayer();
+        }
+    });
+
+    // Load saved game on start
+    loadGame();
+    
+    // Start with empty game if nothing loaded
+    if (players.length === 0) {
+        updateDisplay();
+    }
+</script>
+```
+
+</body>
+</html>
