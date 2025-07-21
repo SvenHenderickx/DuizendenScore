@@ -883,7 +883,7 @@
                 rounds: rounds,
                 timestamp: new Date().toISOString()
             };
-            // localStorage.setItem('duizenden_game', JSON.stringify(gameData));
+             localStorage.setItem('duizenden_game', JSON.stringify(gameData));
             showSaveIndicator();
         } catch (e) {
             console.log('Save not available in Claude.ai environment');
@@ -892,13 +892,13 @@
 
     function loadGame() {
         try {
-            // const saved = localStorage.getItem('duizenden_game');
-            // if (saved) {
-            //     const gameData = JSON.parse(saved);
-            //     players = gameData.players || [];
-            //     rounds = gameData.rounds || [];
-            //     updateDisplay();
-            // }
+            const saved = localStorage.getItem('duizenden_game');
+             if (saved) {
+                 const gameData = JSON.parse(saved);
+                 players = gameData.players || [];
+                 rounds = gameData.rounds || [];
+                 updateDisplay();
+             }
         } catch (e) {
             console.log('Load not available in Claude.ai environment');
         }
