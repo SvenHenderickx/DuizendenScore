@@ -1151,7 +1151,7 @@
         <div class="controls">
             <div class="player-input">
                 <input type="text" id="playerName" placeholder="Speler naam..." maxlength="20" autocomplete="off">
-                <button class="btn btn-primary" onclick="addPlayer()">Toevoegen</button>
+                <button class="btn btn-primary" onclick="addPlayer()">+</button>
             </div>
             <button class="btn btn-danger" onclick="resetGame()">🗑️ Nieuw Spel</button>
             <button class="btn btn-secondary" id="viewToggle" onclick="toggleView()">📊 Tabel Weergave</button>
@@ -1191,7 +1191,7 @@
         let isOnline = navigator.onLine;
         let performanceObserver;
 
-        // Enhanced shake detection for view toggle with proper iOS permission handling
+        // Enhanced shake detection with comprehensive Android debugging
         class ShakeDetector {
             constructor() {
                 this.threshold = 15; // Sensitivity threshold
@@ -1203,35 +1203,102 @@
                 this.shakeEnabled = false;
                 this.lastShake = 0;
                 this.permissionStatus = 'unknown'; // 'unknown', 'granted', 'denied', 'not-required'
+                this.debugInfo = {};
             }
 
             async init() {
                 console.log('🔍 Initializing shake detection...');
                 
+                // Comprehensive environment debugging
+                this.debugInfo = {
+                    userAgent: navigator.userAgent,
+                    isHTTPS: location.protocol === 'https:',
+                    isLocalhost: location.hostname === 'localhost',
+                    hasDeviceMotionEvent: !!window.DeviceMotionEvent,
+                    hasRequestPermission: typeof DeviceMotionEvent?.requestPermission === 'function',
+                    platform: navigator.platform,
+                    touchSupport: 'ontouchstart' in window
+                };
+                
+                console.log('📊 Debug info:', this.debugInfo);
+                
                 // Check if device motion is available
                 if (!window.DeviceMotionEvent) {
-                    console.log('❌ Device motion not supported');
+                    console.log('❌ DeviceMotionEvent not available');
+                    showNotification('❌ Dit apparaat ondersteunt geen bewegingsdetectie', 'error');
                     return false;
                 }
 
-                // Check if we're on HTTPS (required for device motion)
-                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-                    console.log('❌ HTTPS required for device motion');
-                    showNotification('HTTPS vereist voor shake detectie', 'warning');
+                // Check HTTPS requirement for Android
+                if (!this.debugInfo.isHTTPS && !this.debugInfo.isLocalhost) {
+                    console.log('❌ HTTPS required for DeviceMotionEvent');
+                    showNotification('🔒 HTTPS vereist voor shake detectie', 'warning');
                     return false;
                 }
 
-                // Check if permission is required (iOS 13+)
-                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                // Test if DeviceMotionEvent actually works
+                const testResult = await this.testDeviceMotionSupport();
+                if (!testResult) {
+                    return false;
+                }
+
+                // Handle permission based on platform
+                if (this.debugInfo.hasRequestPermission) {
                     console.log('📱 iOS device detected - requesting permission...');
                     return await this.requestIOSPermission();
                 } else {
-                    console.log('🤖 Non-iOS device detected - enabling directly...');
-                    // Android and older iOS - permission not required
+                    console.log('🤖 Android/other device detected - enabling directly...');
                     this.permissionStatus = 'not-required';
                     this.enable();
                     return true;
                 }
+            }
+
+            async testDeviceMotionSupport() {
+                console.log('🧪 Testing DeviceMotionEvent support...');
+                
+                return new Promise((resolve) => {
+                    let eventReceived = false;
+                    let testTimeout;
+                    
+                    const testHandler = (event) => {
+                        console.log('✅ DeviceMotionEvent working! Sample data:', {
+                            x: event.accelerationIncludingGravity?.x,
+                            y: event.accelerationIncludingGravity?.y,
+                            z: event.accelerationIncludingGravity?.z
+                        });
+                        
+                        eventReceived = true;
+                        window.removeEventListener('devicemotion', testHandler);
+                        clearTimeout(testTimeout);
+                        resolve(true);
+                    };
+                    
+                    // Add test listener
+                    window.addEventListener('devicemotion', testHandler, { passive: true });
+                    
+                    // Give it 3 seconds to fire an event
+                    testTimeout = setTimeout(() => {
+                        window.removeEventListener('devicemotion', testHandler);
+                        
+                        if (!eventReceived) {
+                            console.log('❌ No DeviceMotionEvent received after 3 seconds');
+                            
+                            // Provide specific guidance based on platform
+                            let errorMsg = '❌ Geen bewegingsdata ontvangen';
+                            if (this.debugInfo.userAgent.includes('Samsung')) {
+                                errorMsg += ' - Samsung apparaat mogelijk geen gyroscoop';
+                            } else if (!this.debugInfo.isHTTPS && !this.debugInfo.isLocalhost) {
+                                errorMsg += ' - HTTPS vereist';
+                            } else {
+                                errorMsg += ' - controleer browser permissies';
+                            }
+                            
+                            showNotification(errorMsg, 'error');
+                            resolve(false);
+                        }
+                    }, 3000);
+                });
             }
 
             async requestIOSPermission() {
@@ -1274,13 +1341,25 @@
                 console.log('✅ Adding device motion listener...');
                 window.addEventListener('devicemotion', this.handleMotion.bind(this), { passive: true });
                 
-                // Test if events are actually firing
+                // Enhanced test to confirm events are firing
                 setTimeout(() => {
                     if (this.lastTime === 0) {
-                        console.log('⚠️ Device motion events not firing - check permissions');
-                        showNotification('Geen bewegingsdata ontvangen - controleer instellingen', 'warning');
+                        console.log('⚠️ Device motion events not firing after enable');
+                        console.log('🔍 Debug info:', this.debugInfo);
+                        
+                        let troubleshootMsg = 'Geen bewegingsdata - ';
+                        if (this.debugInfo.userAgent.includes('Samsung')) {
+                            troubleshootMsg += 'mogelijk geen sensoren beschikbaar';
+                        } else if (this.debugInfo.userAgent.includes('Chrome')) {
+                            troubleshootMsg += 'controleer Chrome instellingen > Privacy > Sensoren';
+                        } else {
+                            troubleshootMsg += 'herlaad pagina of controleer browser instellingen';
+                        }
+                        
+                        showNotification(troubleshootMsg, 'warning');
                     } else {
                         console.log('📡 Device motion events working!');
+                        showNotification('📱 Shake detectie actief - schud je telefoon!');
                     }
                 }, 2000);
             }
@@ -1373,8 +1452,31 @@
                 return {
                     available: this.isAvailable(),
                     enabled: this.shakeEnabled,
-                    permission: this.permissionStatus
+                    permission: this.permissionStatus,
+                    debugInfo: this.debugInfo
                 };
+            }
+
+            // Enhanced debugging method
+            async runDiagnostics() {
+                console.log('🔬 Running shake detection diagnostics...');
+                
+                const diagnostics = {
+                    environment: this.debugInfo,
+                    deviceMotionAvailable: !!window.DeviceMotionEvent,
+                    httpsCheck: location.protocol === 'https:' || location.hostname === 'localhost',
+                    permissionAPI: typeof DeviceMotionEvent?.requestPermission === 'function',
+                    currentStatus: this.getStatus()
+                };
+                
+                // Test if events fire
+                if (window.DeviceMotionEvent) {
+                    const eventTest = await this.testDeviceMotionSupport();
+                    diagnostics.eventTest = eventTest;
+                }
+                
+                console.log('📋 Diagnostics complete:', diagnostics);
+                return diagnostics;
             }
         }
 
@@ -2473,10 +2575,22 @@
             shortcutsModal.className = 'share-modal';
             
             let shakeStatusText = '';
+            let troubleshootingText = '';
+            
             if (shakeDetector) {
                 const status = shakeDetector.getStatus();
                 if (!status.available) {
                     shakeStatusText = '<p>• ❌ <strong>Niet beschikbaar</strong> (HTTPS + mobiel vereist)</p>';
+                    troubleshootingText = `
+                        <div style="margin-top: 15px; padding: 12px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 3px solid #ef4444;">
+                            <p><strong>🔧 Troubleshooting:</strong></p>
+                            <p style="font-size: 0.9rem; margin-top: 8px;">
+                                1. Zorg voor HTTPS verbinding<br>
+                                2. Gebruik een mobiel apparaat<br>
+                                3. Update je browser naar nieuwste versie
+                            </p>
+                        </div>
+                    `;
                 } else if (status.permission === 'denied') {
                     shakeStatusText = '<p>• ❌ <strong>Permissie geweigerd</strong> (herstart Safari)</p>';
                 } else if (status.enabled) {
@@ -2486,6 +2600,21 @@
                     shakeStatusText = needsPermission 
                         ? '<p>• ⏳ <strong>Beschikbaar</strong> - druk M om in te schakelen</p>'
                         : '<p>• 🔄 <strong>Beschikbaar</strong> - druk M om in te schakelen</p>';
+                    
+                    // Add troubleshooting for Android devices
+                    if (status.debugInfo?.userAgent?.includes('Android')) {
+                        troubleshootingText = `
+                            <div style="margin-top: 15px; padding: 12px; background: rgba(245, 158, 11, 0.1); border-radius: 8px; border-left: 3px solid #f59e0b;">
+                                <p><strong>📱 Android Tips:</strong></p>
+                                <p style="font-size: 0.9rem; margin-top: 8px;">
+                                    • Controleer Chrome > Instellingen > Privacy > Sensoren<br>
+                                    • Herlaad de pagina na het inschakelen<br>
+                                    • Samsung apparaten hebben mogelijk geen gyroscoop<br>
+                                    • <button onclick="window.debugShake?.()" style="background: #f59e0b; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 4px;">🔬 Run Diagnostics</button>
+                                </p>
+                            </div>
+                        `;
+                    }
                 }
             } else {
                 shakeStatusText = '<p>• ❌ <strong>Niet ondersteund</strong></p>';
@@ -2508,10 +2637,12 @@
                         <p style="margin-top: 15px;"><strong>Mobiel - Shake Detectie:</strong></p>
                         ${shakeStatusText}
                         
+                        ${troubleshootingText}
+                        
                         ${shakeDetector && shakeDetector.isAvailable() ? `
                         <p style="margin-top: 10px; font-size: 0.9rem; color: #94a3b8;">
                             <strong>iOS:</strong> Druk M en geef permissie.<br>
-                            <strong>Android:</strong> Werkt automatisch.
+                            <strong>Android:</strong> Druk M om in te schakelen.
                         </p>
                         ` : ''}
                     </div>
@@ -2707,9 +2838,45 @@
                         return await shakeDetector.init();
                     }
                     return false;
+                },
+                runShakeDiagnostics: async () => {
+                    if (shakeDetector) {
+                        return await shakeDetector.runDiagnostics();
+                    }
+                    return null;
                 }
             };
         }
+
+        // Global debug function for easier testing
+        window.debugShake = async () => {
+            if (shakeDetector) {
+                const diagnostics = await shakeDetector.runDiagnostics();
+                console.table(diagnostics.environment);
+                console.log('Full diagnostics:', diagnostics);
+                
+                // Show user-friendly diagnostic info
+                let message = '🔬 Shake Diagnostics:\n\n';
+                message += `Device: ${diagnostics.environment.userAgent.split(' ')[0]}\n`;
+                message += `HTTPS: ${diagnostics.httpsCheck ? '✅' : '❌'}\n`;
+                message += `DeviceMotion: ${diagnostics.deviceMotionAvailable ? '✅' : '❌'}\n`;
+                message += `Events firing: ${diagnostics.eventTest ? '✅' : '❌'}\n`;
+                message += `Enabled: ${diagnostics.currentStatus.enabled ? '✅' : '❌'}\n\n`;
+                
+                if (!diagnostics.eventTest) {
+                    message += 'Troubleshooting:\n';
+                    message += '1. Controleer of je op HTTPS bent\n';
+                    message += '2. Herlaad de pagina\n';
+                    message += '3. Controleer browser instellingen > Privacy > Sensoren\n';
+                    message += '4. Probeer een andere browser';
+                }
+                
+                alert(message);
+                return diagnostics;
+            }
+            alert('Shake detector not initialized');
+            return null;
+        };
     </script>
 </body>
 </html>
