@@ -958,79 +958,6 @@
             line-height: 1.5;
         }
 
-        /* Shake detection permission prompt - Mobile optimized */
-        .shake-permission-prompt {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10001;
-            backdrop-filter: blur(10px);
-            padding: 20px;
-        }
-
-        .shake-permission-prompt > div {
-            background: #1e293b;
-            border-radius: 20px;
-            padding: 24px;
-            color: white;
-            text-align: center;
-            width: 100%;
-            max-width: 320px;
-            border: 1px solid #334155;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-        }
-
-        .shake-permission-prompt h3 {
-            color: #8bc34a;
-            margin-bottom: 12px;
-            font-size: 1.2rem;
-            font-weight: 700;
-        }
-
-        .shake-permission-prompt p {
-            margin-bottom: 20px;
-            line-height: 1.5;
-            color: #e2e8f0;
-            font-size: 0.95rem;
-        }
-
-        .shake-permission-prompt div > div {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .shake-permission-prompt button {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            padding: 14px 20px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            width: 100%;
-            font-size: 15px;
-        }
-
-        .shake-permission-prompt button:first-of-type {
-            background: #8bc34a;
-        }
-
-        .shake-permission-prompt button:last-of-type {
-            background: #64748b;
-        }
-
-        .shake-permission-prompt button:active {
-            transform: scale(0.95);
-        }
-
         /* Enhanced keyboard shortcuts styling */
         kbd {
             background: #334155;
@@ -1264,7 +1191,7 @@
         let isOnline = navigator.onLine;
         let performanceObserver;
 
-        // Enhanced shake detection for view toggle
+        // Enhanced shake detection for view toggle with proper iOS permission handling
         class ShakeDetector {
             constructor() {
                 this.threshold = 15; // Sensitivity threshold
@@ -1275,58 +1202,109 @@
                 this.lastZ = 0;
                 this.shakeEnabled = false;
                 this.lastShake = 0;
+                this.permissionStatus = 'unknown'; // 'unknown', 'granted', 'denied', 'not-required'
             }
 
             async init() {
+                console.log('🔍 Initializing shake detection...');
+                
                 // Check if device motion is available
                 if (!window.DeviceMotionEvent) {
-                    console.log('Device motion not supported');
+                    console.log('❌ Device motion not supported');
                     return false;
                 }
 
-                // Request permission for iOS 13+
+                // Check if we're on HTTPS (required for device motion)
+                if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                    console.log('❌ HTTPS required for device motion');
+                    showNotification('HTTPS vereist voor shake detectie', 'warning');
+                    return false;
+                }
+
+                // Check if permission is required (iOS 13+)
                 if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                    try {
-                        const permission = await DeviceMotionEvent.requestPermission();
-                        if (permission === 'granted') {
-                            this.enable();
-                            showNotification('📱 Schud je telefoon om tussen weergaves te wisselen!');
-                            return true;
-                        } else {
-                            showNotification('Beweging detectie niet toegestaan', 'warning');
-                            return false;
-                        }
-                    } catch (error) {
-                        console.log('Device motion permission error:', error);
-                        return false;
-                    }
+                    console.log('📱 iOS device detected - requesting permission...');
+                    return await this.requestIOSPermission();
                 } else {
+                    console.log('🤖 Non-iOS device detected - enabling directly...');
                     // Android and older iOS - permission not required
+                    this.permissionStatus = 'not-required';
                     this.enable();
-                    setTimeout(() => {
-                        showNotification('💡 Tip: Schud je telefoon om tussen weergaves te wisselen!');
-                    }, 5000);
                     return true;
                 }
             }
 
+            async requestIOSPermission() {
+                try {
+                    console.log('🔐 Requesting iOS motion permission...');
+                    const permission = await DeviceMotionEvent.requestPermission();
+                    console.log('📋 Permission result:', permission);
+                    
+                    if (permission === 'granted') {
+                        this.permissionStatus = 'granted';
+                        this.enable();
+                        showNotification('🎉 Shake detectie ingeschakeld!');
+                        return true;
+                    } else {
+                        this.permissionStatus = 'denied';
+                        showNotification('Shake detectie geweigerd. Herstart Safari om opnieuw te proberen.', 'warning');
+                        console.log('❌ Permission denied by user');
+                        return false;
+                    }
+                } catch (error) {
+                    console.error('💥 Permission request failed:', error);
+                    this.permissionStatus = 'denied';
+                    
+                    if (error.name === 'NotAllowedError') {
+                        showNotification('Shake detectie moet vanuit gebruikersactie worden geactiveerd', 'warning');
+                    } else {
+                        showNotification('Fout bij aanvragen shake permissie', 'error');
+                    }
+                    return false;
+                }
+            }
+
             enable() {
+                if (this.permissionStatus === 'denied') {
+                    console.log('❌ Cannot enable - permission denied');
+                    return;
+                }
+
                 this.shakeEnabled = true;
+                console.log('✅ Adding device motion listener...');
                 window.addEventListener('devicemotion', this.handleMotion.bind(this), { passive: true });
+                
+                // Test if events are actually firing
+                setTimeout(() => {
+                    if (this.lastTime === 0) {
+                        console.log('⚠️ Device motion events not firing - check permissions');
+                        showNotification('Geen bewegingsdata ontvangen - controleer instellingen', 'warning');
+                    } else {
+                        console.log('📡 Device motion events working!');
+                    }
+                }, 2000);
             }
 
             disable() {
                 this.shakeEnabled = false;
+                console.log('🛑 Removing device motion listener...');
                 window.removeEventListener('devicemotion', this.handleMotion.bind(this));
             }
 
             handleMotion(event) {
-                if (!this.shakeEnabled || !event.accelerationIncludingGravity) return;
+                if (!this.shakeEnabled || !event.accelerationIncludingGravity) {
+                    return;
+                }
 
                 const now = Date.now();
                 if (now - this.lastShake < this.timeout) return;
 
                 const { x, y, z } = event.accelerationIncludingGravity;
+                
+                // Log first event to confirm it's working
+                if (this.lastTime === 0) {
+                    console.log('📊 First motion event received:', { x, y, z });
+                }
                 
                 if (this.lastTime) {
                     const deltaTime = now - this.lastTime;
@@ -1339,7 +1317,13 @@
                         // Calculate total acceleration change
                         const acceleration = deltaX + deltaY + deltaZ;
                         
+                        // Log high acceleration events for debugging
+                        if (acceleration > this.threshold * 0.8) {
+                            console.log('🔥 High acceleration detected:', acceleration, 'threshold:', this.threshold);
+                        }
+                        
                         if (acceleration > this.threshold) {
+                            console.log('💥 SHAKE DETECTED! Acceleration:', acceleration);
                             this.onShake();
                             this.lastShake = now;
                         }
@@ -1359,6 +1343,8 @@
                     return;
                 }
 
+                console.log('🎯 Shake detected - toggling view');
+
                 // Haptic feedback
                 this.vibrate();
                 
@@ -1374,6 +1360,21 @@
                 if ('vibrate' in navigator) {
                     navigator.vibrate([50, 50, 50]); // Triple short vibration
                 }
+            }
+
+            // Public method to check if shake detection is available
+            isAvailable() {
+                return window.DeviceMotionEvent && 
+                       (location.protocol === 'https:' || location.hostname === 'localhost');
+            }
+
+            // Public method to get current status
+            getStatus() {
+                return {
+                    available: this.isAvailable(),
+                    enabled: this.shakeEnabled,
+                    permission: this.permissionStatus
+                };
             }
         }
 
@@ -1393,19 +1394,33 @@
             }
 
             async initShakeDetection() {
-                // Initialize shake detection on mobile devices
+                // Initialize shake detector but don't auto-enable
                 if (this.isMobileDevice()) {
                     shakeDetector = new ShakeDetector();
                     
-                    // Auto-enable on mobile, or show permission button
-                    if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                        // iOS - will request permission when needed
-                        setTimeout(() => {
-                            this.showShakePermissionMessage();
-                        }, 3000);
+                    // Check if shake detection is available
+                    if (shakeDetector.isAvailable()) {
+                        console.log('📱 Shake detection available');
+                        
+                        // For iOS devices, show a help message about manual activation
+                        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                            setTimeout(() => {
+                                if (!localStorage.getItem('duizenden_shake_help_shown')) {
+                                    showNotification('💡 Tip: Gebruik de help knop (❓) om shake detectie in te schakelen!');
+                                    localStorage.setItem('duizenden_shake_help_shown', 'true');
+                                }
+                            }, 8000);
+                        } else {
+                            // For Android, auto-enable since no permission needed
+                            setTimeout(async () => {
+                                const success = await shakeDetector.init();
+                                if (success) {
+                                    showNotification('📱 Schud je telefoon om tussen weergaves te wisselen!');
+                                }
+                            }, 3000);
+                        }
                     } else {
-                        // Android - enable immediately
-                        await shakeDetector.init();
+                        console.log('❌ Shake detection not available (needs HTTPS)');
                     }
                 }
             }
@@ -1413,46 +1428,6 @@
             isMobileDevice() {
                 return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                        (window.innerWidth <= 768 && 'ontouchstart' in window);
-            }
-
-            showShakePermissionMessage() {
-                const message = document.createElement('div');
-                message.className = 'shake-permission-prompt';
-                message.innerHTML = `
-                    <div>
-                        <h3>📱 Shake Detectie</h3>
-                        <p>Wil je schudden gebruiken om tussen kaart en tabel weergave te wisselen?</p>
-                        <div>
-                            <button onclick="this.parentElement.parentElement.parentElement.enableShakeDetection()">Ja, inschakelen</button>
-                            <button onclick="this.parentElement.parentElement.parentElement.closeShakePrompt()">Nee, bedankt</button>
-                        </div>
-                    </div>
-                `;
-                
-                // Add methods to message element
-                message.enableShakeDetection = async () => {
-                    if (shakeDetector) {
-                        await shakeDetector.init();
-                    }
-                    message.remove();
-                };
-                
-                message.closeShakePrompt = () => {
-                    message.remove();
-                    localStorage.setItem('duizenden_shake_declined', 'true');
-                };
-                
-                // Close on backdrop click
-                message.onclick = (e) => {
-                    if (e.target === message) {
-                        message.closeShakePrompt();
-                    }
-                };
-                
-                // Only show if not previously declined
-                if (!localStorage.getItem('duizenden_shake_declined')) {
-                    document.body.appendChild(message);
-                }
             }
 
             async initServiceWorker() {
@@ -2459,14 +2434,36 @@
                 return;
             }
 
-            if (shakeDetector.shakeEnabled) {
+            if (!shakeDetector.isAvailable()) {
+                showNotification('Shake detectie vereist HTTPS en mobiel apparaat', 'warning');
+                return;
+            }
+
+            const status = shakeDetector.getStatus();
+            console.log('🔍 Current shake status:', status);
+
+            if (status.enabled) {
+                // Disable shake detection
                 shakeDetector.disable();
                 showNotification('Shake detectie uitgeschakeld 📱❌');
                 localStorage.setItem('duizenden_shake_enabled', 'false');
             } else {
-                shakeDetector.enable();
-                showNotification('Shake detectie ingeschakeld 📱✅');
-                localStorage.setItem('duizenden_shake_enabled', 'true');
+                // Enable shake detection
+                if (status.permission === 'denied') {
+                    showNotification('Permissie geweigerd. Herstart Safari om opnieuw te proberen.', 'warning');
+                    return;
+                }
+
+                // For iOS devices that need permission, init will request it
+                // For others, it will just enable
+                shakeDetector.init().then(success => {
+                    if (success) {
+                        showNotification('Shake detectie ingeschakeld 📱✅');
+                        localStorage.setItem('duizenden_shake_enabled', 'true');
+                    } else {
+                        showNotification('Kon shake detectie niet inschakelen', 'error');
+                    }
+                });
             }
         }
 
@@ -2474,6 +2471,26 @@
             const shortcutsModal = document.createElement('div');
             shortcutsModal.id = 'shortcutsModal';
             shortcutsModal.className = 'share-modal';
+            
+            let shakeStatusText = '';
+            if (shakeDetector) {
+                const status = shakeDetector.getStatus();
+                if (!status.available) {
+                    shakeStatusText = '<p>• ❌ <strong>Niet beschikbaar</strong> (HTTPS + mobiel vereist)</p>';
+                } else if (status.permission === 'denied') {
+                    shakeStatusText = '<p>• ❌ <strong>Permissie geweigerd</strong> (herstart Safari)</p>';
+                } else if (status.enabled) {
+                    shakeStatusText = '<p>• ✅ <strong>Ingeschakeld</strong> - schud je telefoon!</p>';
+                } else {
+                    const needsPermission = typeof DeviceMotionEvent.requestPermission === 'function';
+                    shakeStatusText = needsPermission 
+                        ? '<p>• ⏳ <strong>Beschikbaar</strong> - druk M om in te schakelen</p>'
+                        : '<p>• 🔄 <strong>Beschikbaar</strong> - druk M om in te schakelen</p>';
+                }
+            } else {
+                shakeStatusText = '<p>• ❌ <strong>Niet ondersteund</strong></p>';
+            }
+
             shortcutsModal.innerHTML = `
                 <div class="share-modal-content" onclick="event.stopPropagation()">
                     <h3>⌨️ Sneltoetsen & Bediening</h3>
@@ -2488,10 +2505,14 @@
                         <p>• <kbd>Ctrl+Enter</kbd> - Nieuwe ronde</p>
                         <p>• <kbd>Escape</kbd> - Sluit vensters</p>
                         
-                        ${shakeDetector ? `
-                        <p style="margin-top: 15px;"><strong>Mobiel:</strong></p>
-                        <p>• 📱 <strong>Schudden</strong> - Wissel tussen weergaves</p>
-                        <p>• Status: ${shakeDetector.shakeEnabled ? '✅ Ingeschakeld' : '❌ Uitgeschakeld'}</p>
+                        <p style="margin-top: 15px;"><strong>Mobiel - Shake Detectie:</strong></p>
+                        ${shakeStatusText}
+                        
+                        ${shakeDetector && shakeDetector.isAvailable() ? `
+                        <p style="margin-top: 10px; font-size: 0.9rem; color: #94a3b8;">
+                            <strong>iOS:</strong> Druk M en geef permissie.<br>
+                            <strong>Android:</strong> Werkt automatisch.
+                        </p>
                         ` : ''}
                     </div>
                     <button class="btn" onclick="closeKeyboardShortcuts()" style="width: 100%;">Sluiten</button>
@@ -2639,12 +2660,16 @@
         });
 
         function loadShakePreference() {
-            if (shakeDetector) {
+            if (shakeDetector && shakeDetector.isAvailable()) {
                 const shakeEnabled = localStorage.getItem('duizenden_shake_enabled');
-                if (shakeEnabled === 'false') {
-                    shakeDetector.disable();
-                } else if (shakeEnabled === 'true') {
-                    shakeDetector.enable();
+                console.log('📱 Loading shake preference:', shakeEnabled);
+                
+                if (shakeEnabled === 'true') {
+                    // Try to enable shake detection based on saved preference
+                    // This will handle permission appropriately
+                    setTimeout(() => {
+                        toggleShakeDetection();
+                    }, 1000);
                 }
             }
         }
@@ -2667,8 +2692,21 @@
                 },
                 simulateShake: () => {
                     if (shakeDetector && shakeDetector.shakeEnabled) {
+                        console.log('🧪 Simulating shake event...');
                         shakeDetector.onShake();
+                    } else {
+                        console.log('❌ Shake detector not enabled');
                     }
+                },
+                getShakeStatus: () => {
+                    return shakeDetector ? shakeDetector.getStatus() : null;
+                },
+                testShakePermission: async () => {
+                    if (shakeDetector) {
+                        console.log('🧪 Testing shake permission...');
+                        return await shakeDetector.init();
+                    }
+                    return false;
                 }
             };
         }
