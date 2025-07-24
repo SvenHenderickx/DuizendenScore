@@ -2182,7 +2182,7 @@
             }
         }
 
-        function addRound() {
+          function addRound() {
             const newRound = {};
             players.forEach(player => {
                 newRound[player] = 0;
@@ -2190,6 +2190,12 @@
             rounds.push(newRound);
             updateDisplay();
             saveGame();
+            
+            // Add vibration feedback on mobile
+            if ('vibrate' in navigator) {
+                navigator.vibrate([100, 50, 100]); // Double vibration for new round
+            }
+            
             showNotification(`Ronde ${rounds.length} gestart! 🎯`);
         }
 
