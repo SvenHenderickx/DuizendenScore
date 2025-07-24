@@ -989,6 +989,28 @@
             display: none;
         }
 
+        /* Enhanced keyboard shortcuts styling */
+        kbd {
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #e0e6ed;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+
+        /* Shake detection permission prompt */
+        .shake-permission-prompt button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .shake-permission-prompt button:active {
+            transform: translateY(0);
+        }
+
         /* Responsive and Accessibility Improvements */
         @media (max-width: 480px) {
             .player-input {
@@ -1040,6 +1062,13 @@
                 left: auto;
                 margin-bottom: 10px;
                 justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .header-btn {
+                min-width: 44px;
+                min-height: 44px;
+                margin: 2px;
             }
 
             .install-btn {
@@ -1047,6 +1076,23 @@
                 top: auto;
                 right: auto;
                 margin-top: 10px;
+                width: auto;
+                display: inline-block;
+            }
+
+            .shake-permission-prompt > div {
+                margin: 10px;
+                padding: 20px;
+            }
+
+            .shake-permission-prompt button {
+                width: 100%;
+                margin: 5px 0;
+            }
+
+            .share-modal-content {
+                margin: 10px;
+                max-height: 90vh;
             }
         }
 
@@ -1159,6 +1205,7 @@
         <div class="header">
             <div class="header-actions">
                 <button class="header-btn" onclick="shareGame()" title="Deel scores">📤</button>
+                <button class="header-btn" onclick="showKeyboardShortcuts()" title="Help & Sneltoetsen">❓</button>
                 <button class="header-btn" onclick="toggleWakeLock()" title="Scherm aan houden" id="wakeLockBtn">🔆</button>
             </div>
             <button id="installBtn" class="install-btn">
@@ -1211,6 +1258,122 @@
         let isOnline = navigator.onLine;
         let performanceObserver;
 
+        // Enhanced shake detection for view toggle
+        class ShakeDetector {
+            constructor() {
+                this.threshold = 15; // Sensitivity threshold
+                this.timeout = 1000; // Debounce timeout
+                this.lastTime = 0;
+                this.lastX = 0;
+                this.lastY = 0;
+                this.lastZ = 0;
+                this.shakeEnabled = false;
+                this.lastShake = 0;
+            }
+
+            async init() {
+                // Check if device motion is available
+                if (!window.DeviceMotionEvent) {
+                    console.log('Device motion not supported');
+                    return false;
+                }
+
+                // Request permission for iOS 13+
+                if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                    try {
+                        const permission = await DeviceMotionEvent.requestPermission();
+                        if (permission === 'granted') {
+                            this.enable();
+                            showNotification('📱 Schud je telefoon om tussen weergaves te wisselen!');
+                            return true;
+                        } else {
+                            showNotification('Beweging detectie niet toegestaan', 'warning');
+                            return false;
+                        }
+                    } catch (error) {
+                        console.log('Device motion permission error:', error);
+                        return false;
+                    }
+                } else {
+                    // Android and older iOS - permission not required
+                    this.enable();
+                    setTimeout(() => {
+                        showNotification('💡 Tip: Schud je telefoon om tussen weergaves te wisselen!');
+                    }, 5000);
+                    return true;
+                }
+            }
+
+            enable() {
+                this.shakeEnabled = true;
+                window.addEventListener('devicemotion', this.handleMotion.bind(this), { passive: true });
+            }
+
+            disable() {
+                this.shakeEnabled = false;
+                window.removeEventListener('devicemotion', this.handleMotion.bind(this));
+            }
+
+            handleMotion(event) {
+                if (!this.shakeEnabled || !event.accelerationIncludingGravity) return;
+
+                const now = Date.now();
+                if (now - this.lastShake < this.timeout) return;
+
+                const { x, y, z } = event.accelerationIncludingGravity;
+                
+                if (this.lastTime) {
+                    const deltaTime = now - this.lastTime;
+                    
+                    if (deltaTime > 100) { // Minimum time between samples
+                        const deltaX = Math.abs(x - this.lastX);
+                        const deltaY = Math.abs(y - this.lastY);
+                        const deltaZ = Math.abs(z - this.lastZ);
+                        
+                        // Calculate total acceleration change
+                        const acceleration = deltaX + deltaY + deltaZ;
+                        
+                        if (acceleration > this.threshold) {
+                            this.onShake();
+                            this.lastShake = now;
+                        }
+                    }
+                }
+
+                this.lastTime = now;
+                this.lastX = x;
+                this.lastY = y;
+                this.lastZ = z;
+            }
+
+            onShake() {
+                // Only toggle if there are players (avoid confusion)
+                if (players.length === 0) {
+                    showNotification('Voeg eerst spelers toe!', 'warning');
+                    return;
+                }
+
+                // Haptic feedback
+                this.vibrate();
+                
+                // Toggle view
+                toggleView();
+                
+                // Show feedback
+                const viewName = currentView === 'table' ? 'Tabel' : 'Kaart';
+                showNotification(`📱 ${viewName} weergave geactiveerd!`);
+            }
+
+            vibrate() {
+                if ('vibrate' in navigator) {
+                    navigator.vibrate([50, 50, 50]); // Triple short vibration
+                }
+            }
+        }
+
+        // Initialize shake detector
+        let shakeDetector;
+
         // Enhanced PWA features
         class DuizendenPWA {
             constructor() {
@@ -1219,7 +1382,66 @@
                 this.initOfflineHandling();
                 this.initPerformanceMonitoring();
                 this.initAppShortcuts();
+                this.initShakeDetection();
                 this.handleUrlParams();
+            }
+
+            async initShakeDetection() {
+                // Initialize shake detection on mobile devices
+                if (this.isMobileDevice()) {
+                    shakeDetector = new ShakeDetector();
+                    
+                    // Auto-enable on mobile, or show permission button
+                    if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                        // iOS - will request permission when needed
+                        setTimeout(() => {
+                            this.showShakePermissionMessage();
+                        }, 3000);
+                    } else {
+                        // Android - enable immediately
+                        await shakeDetector.init();
+                    }
+                }
+            }
+
+            isMobileDevice() {
+                return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                       (window.innerWidth <= 768 && 'ontouchstart' in window);
+            }
+
+            showShakePermissionMessage() {
+                const message = document.createElement('div');
+                message.className = 'shake-permission-prompt';
+                message.innerHTML = `
+                    <div style="background: rgba(0,0,0,0.9); position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 10001; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px);">
+                        <div style="background: #1a1f2e; border-radius: 20px; padding: 30px; color: #e0e6ed; text-align: center; max-width: 90%; border: 1px solid #2d3748;">
+                            <h3 style="color: #4ecdc4; margin-bottom: 15px;">📱 Shake Detectie</h3>
+                            <p style="margin-bottom: 20px; line-height: 1.5;">Wil je schudden gebruiken om tussen kaart en tabel weergave te wisselen?</p>
+                            <div style="display: flex; gap: 12px; justify-content: center;">
+                                <button onclick="this.enableShakeDetection()" style="background: #667eea; color: white; border: none; border-radius: 12px; padding: 12px 20px; font-weight: 600; cursor: pointer;">Ja, inschakelen</button>
+                                <button onclick="this.closeShakePrompt()" style="background: #4a5568; color: white; border: none; border-radius: 12px; padding: 12px 20px; font-weight: 600; cursor: pointer;">Nee, bedankt</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Add methods to message element
+                message.enableShakeDetection = async () => {
+                    if (shakeDetector) {
+                        await shakeDetector.init();
+                    }
+                    message.remove();
+                };
+                
+                message.closeShakePrompt = () => {
+                    message.remove();
+                    localStorage.setItem('duizenden_shake_declined', 'true');
+                };
+                
+                // Only show if not previously declined
+                if (!localStorage.getItem('duizenden_shake_declined')) {
+                    document.body.appendChild(message);
+                }
             }
 
             async initServiceWorker() {
@@ -1862,6 +2084,7 @@
             return '';
         }
 
+        // Enhanced view toggle with shake support
         function toggleView() {
             currentView = currentView === 'cards' ? 'table' : 'cards';
             const toggleBtn = document.getElementById('viewToggle');
@@ -1871,6 +2094,17 @@
                 toggleBtn.textContent = '📊 Tabel Weergave';
             }
             updateDisplay();
+            
+            // Save preference
+            localStorage.setItem('duizenden_preferred_view', currentView);
+        }
+
+        // Load preferred view on startup
+        function loadViewPreference() {
+            const savedView = localStorage.getItem('duizenden_preferred_view');
+            if (savedView && savedView !== currentView) {
+                toggleView();
+            }
         }
 
         function getLeaderRanking() {
@@ -2151,7 +2385,7 @@
             });
         }
 
-        // Enhanced keyboard shortcuts
+        // Enhanced keyboard shortcuts with shake detection info
         function setupKeyboardShortcuts() {
             document.addEventListener('keydown', function(e) {
                 // Ctrl/Cmd + N for new game
@@ -2187,12 +2421,81 @@
                     shareGame();
                 }
                 
+                // M for toggle shake detection (mobile)
+                if (e.key === 'm' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+                    e.preventDefault();
+                    toggleShakeDetection();
+                }
+                
+                // H for help/shortcuts
+                if (e.key === 'h' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+                    e.preventDefault();
+                    showKeyboardShortcuts();
+                }
+                
                 // Escape to close modals
                 if (e.key === 'Escape') {
                     closeShareModal();
                     closeWinnerModal();
+                    closeKeyboardShortcuts();
                 }
             });
+        }
+
+        function toggleShakeDetection() {
+            if (!shakeDetector) {
+                showNotification('Shake detectie niet beschikbaar op dit apparaat', 'warning');
+                return;
+            }
+
+            if (shakeDetector.shakeEnabled) {
+                shakeDetector.disable();
+                showNotification('Shake detectie uitgeschakeld 📱❌');
+                localStorage.setItem('duizenden_shake_enabled', 'false');
+            } else {
+                shakeDetector.enable();
+                showNotification('Shake detectie ingeschakeld 📱✅');
+                localStorage.setItem('duizenden_shake_enabled', 'true');
+            }
+        }
+
+        function showKeyboardShortcuts() {
+            const shortcutsModal = document.createElement('div');
+            shortcutsModal.id = 'shortcutsModal';
+            shortcutsModal.className = 'share-modal';
+            shortcutsModal.innerHTML = `
+                <div class="share-modal-content" onclick="event.stopPropagation()">
+                    <h3>⌨️ Sneltoetsen & Bediening</h3>
+                    <div style="text-align: left; line-height: 1.8; margin: 20px 0;">
+                        <p><strong>Toetsenbord:</strong></p>
+                        <p>• <kbd>V</kbd> - Wissel tussen kaart/tabel weergave</p>
+                        <p>• <kbd>S</kbd> - Deel scores</p>
+                        <p>• <kbd>M</kbd> - Schakel shake detectie in/uit</p>
+                        <p>• <kbd>H</kbd> - Toon deze help</p>
+                        <p>• <kbd>Ctrl+N</kbd> - Nieuw spel</p>
+                        <p>• <kbd>Ctrl+S</kbd> - Handmatig opslaan</p>
+                        <p>• <kbd>Ctrl+Enter</kbd> - Nieuwe ronde</p>
+                        <p>• <kbd>Escape</kbd> - Sluit vensters</p>
+                        
+                        ${shakeDetector ? `
+                        <p style="margin-top: 15px;"><strong>Mobiel:</strong></p>
+                        <p>• 📱 <strong>Schudden</strong> - Wissel tussen weergaves</p>
+                        <p>• Status: ${shakeDetector.shakeEnabled ? '✅ Ingeschakeld' : '❌ Uitgeschakeld'}</p>
+                        ` : ''}
+                    </div>
+                    <button class="btn" onclick="closeKeyboardShortcuts()" style="width: 100%;">Sluiten</button>
+                </div>
+            `;
+            
+            shortcutsModal.onclick = closeKeyboardShortcuts;
+            document.body.appendChild(shortcutsModal);
+        }
+
+        function closeKeyboardShortcuts() {
+            const modal = document.getElementById('shortcutsModal');
+            if (modal) {
+                modal.remove();
+            }
         }
 
         // Enhanced auto-save with debouncing
@@ -2277,6 +2580,12 @@
             // Load game data
             loadGame();
             
+            // Load view preference
+            loadViewPreference();
+            
+            // Load shake detection preference
+            loadShakePreference();
+            
             // Initialize display
             if (players.length === 0) {
                 updateDisplay();
@@ -2307,6 +2616,7 @@
             
             console.log('🎯 Duizenden PWA loaded successfully!');
             console.log('✅ Fully offline capable - no internet required!');
+            console.log('📱 Shake detection available on mobile devices!');
             
             // Show offline capability message on first load
             if (!localStorage.getItem('duizenden_offline_message_shown')) {
@@ -2317,19 +2627,37 @@
             }
         });
 
+        function loadShakePreference() {
+            if (shakeDetector) {
+                const shakeEnabled = localStorage.getItem('duizenden_shake_enabled');
+                if (shakeEnabled === 'false') {
+                    shakeDetector.disable();
+                } else if (shakeEnabled === 'true') {
+                    shakeDetector.enable();
+                }
+            }
+        }
+
         // Export for debugging (development only)
-        if (false) {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             window.duizendenDebug = {
                 players,
                 rounds,
+                shakeDetector,
                 getGameStatistics,
                 loadGame,
                 saveGame,
+                toggleShakeDetection,
                 resetGame: () => {
                     players = [];
                     rounds = [];
                     updateDisplay();
                     saveGame();
+                },
+                simulateShake: () => {
+                    if (shakeDetector && shakeDetector.shakeEnabled) {
+                        shakeDetector.onShake();
+                    }
                 }
             };
         }
