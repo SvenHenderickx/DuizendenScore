@@ -1151,7 +1151,7 @@
         <div class="controls">
             <div class="player-input">
                 <input type="text" id="playerName" placeholder="Speler naam..." maxlength="20" autocomplete="off">
-                <button class="btn btn-primary" onclick="addPlayer()">+</button>
+                <button class="btn btn-primary" onclick="addPlayer()">Toevoegen</button>
             </div>
             <button class="btn btn-danger" onclick="resetGame()">🗑️ Nieuw Spel</button>
             <button class="btn btn-secondary" id="viewToggle" onclick="toggleView()">📊 Tabel Weergave</button>
@@ -1191,10 +1191,10 @@
         let isOnline = navigator.onLine;
         let performanceObserver;
 
-        // Enhanced shake detection with comprehensive Android debugging
+        // Enhanced shake detection with adjustable sensitivity
         class ShakeDetector {
             constructor() {
-                this.threshold = 15; // Sensitivity threshold
+                this.threshold = 8; // Lowered sensitivity threshold (was 15)
                 this.timeout = 1000; // Debounce timeout
                 this.lastTime = 0;
                 this.lastX = 0;
@@ -1204,6 +1204,7 @@
                 this.lastShake = 0;
                 this.permissionStatus = 'unknown'; // 'unknown', 'granted', 'denied', 'not-required'
                 this.debugInfo = {};
+                this.testMode = false; // For sensitivity testing
             }
 
             async init() {
@@ -1396,13 +1397,22 @@
                         // Calculate total acceleration change
                         const acceleration = deltaX + deltaY + deltaZ;
                         
+                        // In test mode, show current acceleration values
+                        if (this.testMode) {
+                            console.log(`📊 Acceleration: ${acceleration.toFixed(1)} (threshold: ${this.threshold})`);
+                            // Show visual feedback for testing
+                            if (acceleration > this.threshold * 0.7) {
+                                showNotification(`🔥 Bijna! ${acceleration.toFixed(1)}/${this.threshold}`, 'warning');
+                            }
+                        }
+                        
                         // Log high acceleration events for debugging
                         if (acceleration > this.threshold * 0.8) {
-                            console.log('🔥 High acceleration detected:', acceleration, 'threshold:', this.threshold);
+                            console.log('🔥 High acceleration detected:', acceleration.toFixed(1), 'threshold:', this.threshold);
                         }
                         
                         if (acceleration > this.threshold) {
-                            console.log('💥 SHAKE DETECTED! Acceleration:', acceleration);
+                            console.log('💥 SHAKE DETECTED! Acceleration:', acceleration.toFixed(1));
                             this.onShake();
                             this.lastShake = now;
                         }
@@ -1416,6 +1426,13 @@
             }
 
             onShake() {
+                // In test mode, don't toggle view, just show feedback
+                if (this.testMode) {
+                    showNotification('✅ SHAKE GEDETECTEERD! Perfect!', 'success');
+                    this.vibrate();
+                    return;
+                }
+
                 // Only toggle if there are players (avoid confusion)
                 if (players.length === 0) {
                     showNotification('Voeg eerst spelers toe!', 'warning');
@@ -1453,8 +1470,66 @@
                     available: this.isAvailable(),
                     enabled: this.shakeEnabled,
                     permission: this.permissionStatus,
-                    debugInfo: this.debugInfo
+                    debugInfo: this.debugInfo,
+                    sensitivity: this.threshold,
+                    testMode: this.testMode
                 };
+            }
+
+            // Sensitivity adjustment methods
+            setSensitivity(newThreshold) {
+                this.threshold = Math.max(2, Math.min(25, newThreshold)); // Clamp between 2-25
+                console.log(`🎛️ Sensitivity set to: ${this.threshold}`);
+                localStorage.setItem('duizenden_shake_sensitivity', this.threshold.toString());
+                return this.threshold;
+            }
+
+            increaseSensitivity() {
+                const newThreshold = this.setSensitivity(this.threshold - 2); // Lower number = more sensitive
+                showNotification(`Gevoeligheid verhoogd: ${newThreshold}`, 'success');
+                return newThreshold;
+            }
+
+            decreaseSensitivity() {
+                const newThreshold = this.setSensitivity(this.threshold + 2); // Higher number = less sensitive
+                showNotification(`Gevoeligheid verlaagd: ${newThreshold}`, 'warning');
+                return newThreshold;
+            }
+
+            // Test mode for calibrating shake intensity
+            startTestMode() {
+                if (!this.shakeEnabled) {
+                    showNotification('Schakel eerst shake detectie in (M)', 'warning');
+                    return false;
+                }
+
+                this.testMode = true;
+                console.log('🧪 Test mode started - shake your phone to see values');
+                showNotification('🧪 Test modus - schud je telefoon om waarden te zien!', 'success');
+                
+                // Auto-stop test mode after 10 seconds
+                setTimeout(() => {
+                    if (this.testMode) {
+                        this.stopTestMode();
+                    }
+                }, 10000);
+                
+                return true;
+            }
+
+            stopTestMode() {
+                this.testMode = false;
+                console.log('🛑 Test mode stopped');
+                showNotification('Test modus gestopt', 'success');
+            }
+
+            // Load saved sensitivity
+            loadSensitivity() {
+                const saved = localStorage.getItem('duizenden_shake_sensitivity');
+                if (saved) {
+                    this.threshold = parseInt(saved);
+                    console.log(`📱 Loaded saved sensitivity: ${this.threshold}`);
+                }
             }
 
             // Enhanced debugging method
@@ -1500,6 +1575,9 @@
                 if (this.isMobileDevice()) {
                     shakeDetector = new ShakeDetector();
                     
+                    // Load saved sensitivity
+                    shakeDetector.loadSensitivity();
+                    
                     // Check if shake detection is available
                     if (shakeDetector.isAvailable()) {
                         console.log('📱 Shake detection available');
@@ -1517,7 +1595,7 @@
                             setTimeout(async () => {
                                 const success = await shakeDetector.init();
                                 if (success) {
-                                    showNotification('📱 Schud je telefoon om tussen weergaves te wisselen!');
+                                    showNotification('📱 Schud je telefoon lichtjes om tussen weergaves te wisselen!');
                                 }
                             }, 3000);
                         }
@@ -2473,7 +2551,7 @@
             });
         }
 
-        // Enhanced keyboard shortcuts with shake detection info
+        // Enhanced keyboard shortcuts with shake detection controls
         function setupKeyboardShortcuts() {
             document.addEventListener('keydown', function(e) {
                 // Ctrl/Cmd + N for new game
@@ -2509,10 +2587,28 @@
                     shareGame();
                 }
                 
-                // M for toggle shake detection (mobile)
+                // M for toggle shake detection
                 if (e.key === 'm' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
                     e.preventDefault();
                     toggleShakeDetection();
+                }
+
+                // T for test shake sensitivity
+                if (e.key === 't' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+                    e.preventDefault();
+                    testShakeSensitivity();
+                }
+
+                // + for increase shake sensitivity (more sensitive)
+                if (e.key === '+' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+                    e.preventDefault();
+                    adjustShakeSensitivity(1);
+                }
+
+                // - for decrease shake sensitivity (less sensitive)
+                if (e.key === '-' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+                    e.preventDefault();
+                    adjustShakeSensitivity(-1);
                 }
                 
                 // H for help/shortcuts
@@ -2528,6 +2624,32 @@
                     closeKeyboardShortcuts();
                 }
             });
+        }
+
+        function testShakeSensitivity() {
+            if (!shakeDetector) {
+                showNotification('Shake detectie niet beschikbaar', 'warning');
+                return;
+            }
+
+            if (shakeDetector.testMode) {
+                shakeDetector.stopTestMode();
+            } else {
+                shakeDetector.startTestMode();
+            }
+        }
+
+        function adjustShakeSensitivity(direction) {
+            if (!shakeDetector) {
+                showNotification('Shake detectie niet beschikbaar', 'warning');
+                return;
+            }
+
+            if (direction > 0) {
+                shakeDetector.increaseSensitivity();
+            } else {
+                shakeDetector.decreaseSensitivity();
+            }
         }
 
         function toggleShakeDetection() {
@@ -2576,6 +2698,7 @@
             
             let shakeStatusText = '';
             let troubleshootingText = '';
+            let sensitivityControls = '';
             
             if (shakeDetector) {
                 const status = shakeDetector.getStatus();
@@ -2594,7 +2717,22 @@
                 } else if (status.permission === 'denied') {
                     shakeStatusText = '<p>• ❌ <strong>Permissie geweigerd</strong> (herstart Safari)</p>';
                 } else if (status.enabled) {
-                    shakeStatusText = '<p>• ✅ <strong>Ingeschakeld</strong> - schud je telefoon!</p>';
+                    shakeStatusText = `<p>• ✅ <strong>Ingeschakeld</strong> - gevoeligheid: ${status.sensitivity}</p>`;
+                    
+                    sensitivityControls = `
+                        <div style="margin-top: 15px; padding: 12px; background: rgba(139, 195, 74, 0.1); border-radius: 8px; border-left: 3px solid #8bc34a;">
+                            <p><strong>🎛️ Gevoeligheid aanpassen:</strong></p>
+                            <p style="font-size: 0.9rem; margin-top: 8px;">
+                                • <kbd>T</kbd> - Test modus (10 sec)<br>
+                                • <kbd>+</kbd> - Gevoeliger maken<br>
+                                • <kbd>-</kbd> - Minder gevoelig maken<br>
+                                • Huidige waarde: <strong>${status.sensitivity}</strong> (2=zeer gevoelig, 25=weinig gevoelig)
+                            </p>
+                            <p style="font-size: 0.85rem; margin-top: 8px; color: #64748b;">
+                                💡 <strong>Tip:</strong> Een lichte pols-beweging zou genoeg moeten zijn!
+                            </p>
+                        </div>
+                    `;
                 } else {
                     const needsPermission = typeof DeviceMotionEvent.requestPermission === 'function';
                     shakeStatusText = needsPermission 
@@ -2624,10 +2762,9 @@
                 <div class="share-modal-content" onclick="event.stopPropagation()">
                     <h3>⌨️ Sneltoetsen & Bediening</h3>
                     <div style="text-align: left; line-height: 1.8; margin: 20px 0;">
-                        <p><strong>Toetsenbord:</strong></p>
+                        <p><strong>Algemeen:</strong></p>
                         <p>• <kbd>V</kbd> - Wissel tussen kaart/tabel weergave</p>
                         <p>• <kbd>S</kbd> - Deel scores</p>
-                        <p>• <kbd>M</kbd> - Schakel shake detectie in/uit</p>
                         <p>• <kbd>H</kbd> - Toon deze help</p>
                         <p>• <kbd>Ctrl+N</kbd> - Nieuw spel</p>
                         <p>• <kbd>Ctrl+S</kbd> - Handmatig opslaan</p>
@@ -2635,14 +2772,17 @@
                         <p>• <kbd>Escape</kbd> - Sluit vensters</p>
                         
                         <p style="margin-top: 15px;"><strong>Mobiel - Shake Detectie:</strong></p>
+                        <p>• <kbd>M</kbd> - Schakel shake detectie in/uit</p>
                         ${shakeStatusText}
                         
+                        ${sensitivityControls}
                         ${troubleshootingText}
                         
                         ${shakeDetector && shakeDetector.isAvailable() ? `
                         <p style="margin-top: 10px; font-size: 0.9rem; color: #94a3b8;">
                             <strong>iOS:</strong> Druk M en geef permissie.<br>
-                            <strong>Android:</strong> Druk M om in te schakelen.
+                            <strong>Android:</strong> Druk M om in te schakelen.<br>
+                            <strong>Shake kracht:</strong> Lichte pols-beweging is genoeg!
                         </p>
                         ` : ''}
                     </div>
@@ -2861,15 +3001,26 @@
                 message += `HTTPS: ${diagnostics.httpsCheck ? '✅' : '❌'}\n`;
                 message += `DeviceMotion: ${diagnostics.deviceMotionAvailable ? '✅' : '❌'}\n`;
                 message += `Events firing: ${diagnostics.eventTest ? '✅' : '❌'}\n`;
-                message += `Enabled: ${diagnostics.currentStatus.enabled ? '✅' : '❌'}\n\n`;
+                message += `Enabled: ${diagnostics.currentStatus.enabled ? '✅' : '❌'}\n`;
+                message += `Sensitivity: ${diagnostics.currentStatus.sensitivity}\n\n`;
                 
                 if (!diagnostics.eventTest) {
                     message += 'Troubleshooting:\n';
                     message += '1. Controleer of je op HTTPS bent\n';
                     message += '2. Herlaad de pagina\n';
                     message += '3. Controleer browser instellingen > Privacy > Sensoren\n';
-                    message += '4. Probeer een andere browser';
+                    message += '4. Probeer een andere browser\n\n';
+                } else {
+                    message += 'Test de gevoeligheid:\n';
+                    message += '• Druk T voor test modus\n';
+                    message += '• Druk + om gevoeliger te maken\n';
+                    message += '• Druk - om minder gevoelig te maken\n\n';
                 }
+                
+                message += 'Hoe hard schudden:\n';
+                message += '• Een lichte pols-beweging zou genoeg moeten zijn\n';
+                message += '• Niet te hard - telefoon vasthouden!\n';
+                message += '• Test met T-toets om ideale kracht te vinden';
                 
                 alert(message);
                 return diagnostics;
